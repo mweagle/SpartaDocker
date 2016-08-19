@@ -298,7 +298,7 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 		})
 		instanceProfileRes.DependsOn = append(instanceProfileRes.DependsOn, iamEC2RoleName)
 
-		// 7 - IAM Role		statements := sparta.CommonIAMStatements.Core
+		// 7 - IAM Role
 		ec2IAMStatements := sparta.CommonIAMStatements.Core
 		ec2IAMStatements = append(ec2IAMStatements, spartaIAM.PolicyStatement{
 			Action: []string{"ecs:CreateCluster",
@@ -306,7 +306,6 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 				"ecs:DeregisterContainerInstance",
 				"ecs:DiscoverPollEndpoint",
 				"ecs:Submit*",
-				"ecr:*",
 				"ecs:Poll"},
 			Effect:   "Allow",
 			Resource: gocf.String("*"),
@@ -322,6 +321,8 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 
 		ec2IAMStatements = append(ec2IAMStatements, spartaIAM.PolicyStatement{
 			Action: []string{
+				// TODO: POLA
+				"ecr:*",
 				"ecr:GetAuthorizationToken",
 				"ecr:BatchCheckLayerAvailability",
 				"ecr:GetDownloadUrlForLayer",
