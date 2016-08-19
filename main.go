@@ -483,9 +483,9 @@ func main() {
 		PostBuild: SpartaPostBuildDockerImageHook,
 	}
 
-	// Shared SQS resource that the Lambda function will post and the worker
-	// will pull
-	sqsResourceName := sparta.CloudFormationResourceName("WorkerQueue", "WorkerQueue")
+	// Shared SQS resource to which the Lambda function will push
+	// and the ECS pool will pull
+	sqsResourceName := stableCloudFormationResourceName("WorkerQueue")
 
 	// Setup an IAM role that allows the lambda function to send a message
 	// to the queue.
