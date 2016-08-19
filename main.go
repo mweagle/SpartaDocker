@@ -68,7 +68,7 @@ func helloWorld(event *json.RawMessage,
 
 func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 
-	// DUMP this and move to ECS...
+	// More information on ECS
 	// http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
 	return func(serviceName string,
 		lambdaResourceName string,
@@ -83,7 +83,7 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 
 		logger.WithFields(logrus.Fields{
 			"DecoratorContext": context,
-		}).Debug("Decorate template with ElasticBeanstalk info")
+		}).Debug("Decorate template with ElasticContainerService info")
 
 		// 1 - Setup the SQS that we'll publish to
 		sqs := &gocf.SQSQueue{}
@@ -487,8 +487,8 @@ func main() {
 	// will pull
 	sqsResourceName := sparta.CloudFormationResourceName("WorkerQueue", "WorkerQueue")
 
-	// Setup an IAM role that's shared between the lambda function and the
-	// worker
+	// Setup an IAM role that allows the lambda function to send a message
+	// to the queue.
 	iamPolicy := sparta.IAMRoleDefinition{
 		Privileges: []sparta.IAMRolePrivilege{
 			sparta.IAMRolePrivilege{
