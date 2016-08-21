@@ -151,7 +151,8 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 		logGroup := gocf.LogsLogGroup{
 			RetentionInDays: gocf.Integer(1),
 		}
-		cfTemplate.AddResource(ecsLogsGroupName, logGroup)
+		logGroupRes := cfTemplate.AddResource(ecsLogsGroupName, logGroup)
+		logGroupRes.DeletionPolicy = "Retain"
 
 		// 3b - Task Definition
 		ecsTaskDefinition := gocf.ECSTaskDefinition{
