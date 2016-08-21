@@ -35,7 +35,6 @@ action=/opt/aws/bin/cfn-init -v --stack { "Ref" : "AWS::StackName" } --resource 
 runas=root`
 
 const ecrRepositoryName = "spartadocker"
-
 const sqsQueueURLEnvVar = "SQS_QUEUE_URL"
 const sqsQueueNameEnvVar = "SQS_QUEUE_NAME"
 
@@ -46,7 +45,9 @@ func stableCloudFormationResourceName(component string) string {
 	return sparta.CloudFormationResourceName(component, component)
 }
 
-func convertToTemplateExpression(templateData string, userDataProps map[string]interface{}) (*gocf.StringExpr, error) {
+func convertToTemplateExpression(templateData string,
+	userDataProps map[string]interface{}) (*gocf.StringExpr,
+	error) {
 	templateReader := strings.NewReader(templateData)
 	return spartaCF.ConvertToTemplateExpression(templateReader, userDataProps)
 }
@@ -301,8 +302,10 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 
 		// 7 - IAM Role
 		ec2IAMStatements := sparta.CommonIAMStatements.Core
+		// TODO: POLA
 		ec2IAMStatements = append(ec2IAMStatements, spartaIAM.PolicyStatement{
-			Action: []string{"ecs:CreateCluster",
+			Action: []string{"ecr:Get*",
+				"ecs:CreateCluster",
 				"ecs:RegisterContainerInstance",
 				"ecs:DeregisterContainerInstance",
 				"ecs:DiscoverPollEndpoint",
@@ -322,8 +325,6 @@ func helloWorldDecorator(sqsResourceName string) sparta.TemplateDecorator {
 
 		ec2IAMStatements = append(ec2IAMStatements, spartaIAM.PolicyStatement{
 			Action: []string{
-				// TODO: POLA
-				"ecr:*",
 				"ecr:GetAuthorizationToken",
 				"ecr:BatchCheckLayerAvailability",
 				"ecr:GetDownloadUrlForLayer",
