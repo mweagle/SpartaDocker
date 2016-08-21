@@ -52,14 +52,14 @@ explore:
 	go run main.go --level debug explore
 
 provision: generate vet
-	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key sparta-test
+	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key $(SPARTA_SSH_KEY)
 
 describe: generate vet
 	clear
 	S3_TEST_BUCKET="" SNS_TEST_TOPIC="" DYNAMO_TEST_STREAM="" go run main.go --level info describe --out ./graph.html
 
 runDocker:
-	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key sparta-test --noop
+	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key $(SPARTA_SSH_KEY) --noop
 	docker run \
 		-e "AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY)" \
 		-e "AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID)" \
