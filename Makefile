@@ -52,7 +52,7 @@ explore:
 	go run main.go --level debug explore
 
 provision: generate vet
-	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key sparta-test --noop
+	go run main.go --buildID latest --level info provision --s3Bucket $(S3_BUCKET) --key sparta-test
 
 describe: generate vet
 	clear
