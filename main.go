@@ -81,7 +81,7 @@ func helloWorldLambda(event *json.RawMessage,
 			return
 		}
 		sqsSvc := sqs.New(sess)
-		queueURL := fmt.Sprintf("https://sqs.%s.amazonaws.com/%s", sess.Config.Region, queueName)
+		queueURL := fmt.Sprintf("https://sqs.%s.amazonaws.com/%s", *sess.Config.Region, queueName)
 		sendMessageInput := sqs.SendMessageInput{
 			MessageBody: aws.String("Hello from Sparta!"),
 			QueueUrl:    aws.String(queueURL),
@@ -170,7 +170,7 @@ func helloWorldDecorator(serviceName string,
 	// 2 - ECS Service
 	ecsService := gocf.ECSService{
 		Cluster:      gocf.Ref(ecsClusterName).String(),
-		DesiredCount: gocf.String("1"),
+		DesiredCount: gocf.Integer(1),
 		DeploymentConfiguration: &gocf.EC2ContainerServiceServiceDeploymentConfiguration{
 			MaximumPercent:        gocf.Integer(100),
 			MinimumHealthyPercent: gocf.Integer(0),
