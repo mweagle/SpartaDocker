@@ -3,19 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	gocf "github.com/crewjam/go-cloudformation"
 	sparta "github.com/mweagle/Sparta"
 	spartaCF "github.com/mweagle/Sparta/aws/cloudformation"
 	spartaIAM "github.com/mweagle/Sparta/aws/iam"
 	spartaDocker "github.com/mweagle/Sparta/docker"
+	gocf "github.com/mweagle/go-cloudformation"
 	"github.com/spf13/cobra"
-	"net/http"
-	"os"
-	"strings"
 )
 
 const userDataScriptTemplate = `#!/bin/bash -xe
@@ -171,7 +172,7 @@ func helloWorldDecorator(serviceName string,
 	ecsService := gocf.ECSService{
 		Cluster:      gocf.Ref(ecsClusterName).String(),
 		DesiredCount: gocf.Integer(1),
-		DeploymentConfiguration: &gocf.EC2ContainerServiceServiceDeploymentConfiguration{
+		DeploymentConfiguration: &gocf.ECSServiceDeploymentConfiguration{
 			MaximumPercent:        gocf.Integer(100),
 			MinimumHealthyPercent: gocf.Integer(0),
 		},
@@ -190,13 +191,13 @@ func helloWorldDecorator(serviceName string,
 
 	// 3b - Task Definition
 	ecsTaskDefinition := gocf.ECSTaskDefinition{
-		ContainerDefinitions: &gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsList{
-			gocf.EC2ContainerServiceTaskDefinitionContainerDefinitions{
+		ContainerDefinitions: &gocf.ECSTaskDefinitionContainerDefinitionList{
+			gocf.ECSTaskDefinitionContainerDefinition{
 				Name:      gocf.String(serviceName),
-				Cpu:       gocf.Integer(10),
+				CPU:       gocf.Integer(10),
 				Memory:    gocf.Integer(512),
 				Essential: gocf.Bool(true),
-				LogConfiguration: &gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsLogConfiguration{
+				LogConfiguration: &gocf.ECSTaskDefinitionLogConfiguration{
 					LogDriver: gocf.String("awslogs"),
 					Options: map[string]interface{}{
 						"awslogs-group":  gocf.Ref(ecsLogsGroupName).String(),
@@ -204,21 +205,21 @@ func helloWorldDecorator(serviceName string,
 					},
 				},
 				Image: gocf.String(context["URL"].(string)),
-				PortMappings: &gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsPortMappingsList{
-					gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsPortMappings{
+				PortMappings: &gocf.ECSTaskDefinitionPortMappingList{
+					gocf.ECSTaskDefinitionPortMapping{
 						ContainerPort: gocf.Integer(9999),
 					},
 				},
-				Environment: &gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsEnvironmentList{
-					gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsEnvironment{
+				Environment: &gocf.ECSTaskDefinitionKeyValuePairList{
+					gocf.ECSTaskDefinitionKeyValuePair{
 						Name:  gocf.String("AWS_REGION"),
 						Value: gocf.Ref("AWS::Region").String(),
 					},
-					gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsEnvironment{
+					gocf.ECSTaskDefinitionKeyValuePair{
 						Name:  gocf.String(sqsQueueURLEnvVar),
 						Value: gocf.Ref(sqsResourceName).String(),
 					},
-					gocf.EC2ContainerServiceTaskDefinitionContainerDefinitionsEnvironment{
+					gocf.ECSTaskDefinitionKeyValuePair{
 						Name:  gocf.String(sqsQueueNameEnvVar),
 						Value: gocf.GetAtt(sqsResourceName, "QueueName").String(),
 					},
@@ -237,8 +238,8 @@ func helloWorldDecorator(serviceName string,
 		MaxSize:                 gocf.String("1"),
 		DesiredCapacity:         gocf.String("1"),
 		AvailabilityZones:       gocf.GetAZs(gocf.String("")),
-		Tags: &gocf.AutoScalingTagsList{
-			gocf.AutoScalingTags{
+		Tags: &gocf.AutoScalingAutoScalingGroupTagPropertyList{
+			gocf.AutoScalingAutoScalingGroupTagProperty{
 				Key:               gocf.String("Name"),
 				Value:             gocf.String(fmt.Sprintf("%s ECS Node", serviceName)),
 				PropagateAtLaunch: gocf.Bool(true),
@@ -273,7 +274,7 @@ func helloWorldDecorator(serviceName string,
 	}
 
 	asgLaunchConfiguration := gocf.AutoScalingLaunchConfiguration{
-		ImageId:            gocf.FindInMap("AWSRegionToAMI", gocf.Ref("AWS::Region").String(), gocf.String("AMIID")).String(),
+		ImageID:            gocf.FindInMap("AWSRegionToAMI", gocf.Ref("AWS::Region").String(), gocf.String("AMIID")).String(),
 		InstanceType:       gocf.String("t2.micro"),
 		IamInstanceProfile: gocf.Ref(iamInstanceProfileName).String(),
 		KeyName:            gocf.String(SSHKeyName),
@@ -325,12 +326,11 @@ func helloWorldDecorator(serviceName string,
 	}
 
 	// 6 - InstanceProfile
-	var profileRoles []interface{}
-	profileRoles = append(profileRoles, gocf.Ref(iamEC2RoleName))
-	instanceProfileRes := cfTemplate.AddResource(iamInstanceProfileName, &gocf.IAMInstanceProfile{
-		Path:  gocf.String("/"),
-		Roles: profileRoles,
-	})
+	instanceProfileRes := cfTemplate.AddResource(iamInstanceProfileName,
+		&gocf.IAMInstanceProfile{
+			Path:  gocf.String("/"),
+			Roles: gocf.StringList(gocf.Ref(iamEC2RoleName)),
+		})
 	instanceProfileRes.DependsOn = append(instanceProfileRes.DependsOn, iamEC2RoleName)
 
 	// 7 - IAM Role
@@ -374,9 +374,9 @@ func helloWorldDecorator(serviceName string,
 			gocf.String(":repository/"),
 			gocf.String(ecrRepositoryName)),
 	})
-	iamPolicyList := gocf.IAMPoliciesList{}
+	iamPolicyList := gocf.IAMRolePolicyList{}
 	iamPolicyList = append(iamPolicyList,
-		gocf.IAMPolicies{
+		gocf.IAMRolePolicy{
 			PolicyDocument: sparta.ArbitraryJSONObject{
 				"Version":   "2012-10-17",
 				"Statement": ec2IAMStatements,
@@ -544,7 +544,8 @@ func main() {
 		lambdaFunctions,
 		nil,
 		nil,
-		&workflowHooks)
+		&workflowHooks,
+		false)
 	if err != nil {
 		os.Exit(1)
 	}
