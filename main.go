@@ -539,7 +539,8 @@ func main() {
 
 	var lambdaFunctions []*sparta.LambdaAWSInfo
 	lambdaFunctions = append(lambdaFunctions, lambdaFn)
-	err := sparta.MainEx("SpartaDocker",
+	stackName := spartaCF.UserScopedStackName("SpartaDocker")
+	err := sparta.MainEx(stackName,
 		fmt.Sprintf("Test Docker deployment"),
 		lambdaFunctions,
 		nil,
