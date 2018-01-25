@@ -1,21 +1,21 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	sparta "github.com/mweagle/Sparta"
+	spartaAWS "github.com/mweagle/Sparta/aws"
 	spartaCF "github.com/mweagle/Sparta/aws/cloudformation"
 	spartaIAM "github.com/mweagle/Sparta/aws/iam"
 	spartaDocker "github.com/mweagle/Sparta/docker"
 	gocf "github.com/mweagle/go-cloudformation"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -58,11 +58,8 @@ func convertToTemplateExpression(templateData string,
 }
 
 // Standard AWS λ function
-func helloWorldLambda(event *json.RawMessage,
-	context *sparta.LambdaContext,
-	w http.ResponseWriter,
-	logger *logrus.Logger) {
-
+func helloWorldLambda(ctx context.Context) (string, error) {
+	logger, _ := ctx.Value(sparta.ContextKeyLogger).(*logrus.Logger)
 	configuration, configurationErr := sparta.Discover()
 
 	logger.WithFields(logrus.Fields{
@@ -76,10 +73,8 @@ func helloWorldLambda(event *json.RawMessage,
 		// Push a message onto the queue
 		sess, sessionError := session.NewSession()
 		if sessionError != nil {
-			http.Error(w,
-				fmt.Sprintf("Failed to create new AWS Session: %s", sessionError),
-				http.StatusInternalServerError)
-			return
+			return "",
+				fmt.Errorf("Failed to create new AWS session: %s", sessionError)
 		}
 		sqsSvc := sqs.New(sess)
 		queueURL := fmt.Sprintf("https://sqs.%s.amazonaws.com/%s", *sess.Config.Region, queueName)
@@ -93,14 +88,12 @@ func helloWorldLambda(event *json.RawMessage,
 				"SendError": sendMessageErr,
 			}).Warn("Failed to send message")
 		} else {
-			fmt.Fprintf(w, "Message sent to SQS: %s", sendMessageResponse)
+			return fmt.Sprintf("Message sent to SQS: %s", sendMessageResponse), nil
 		}
 	} else {
-		http.Error(w,
-			fmt.Sprintf("Failed to find SQS queue name: %s", sqsResourceName),
-			http.StatusInternalServerError)
+		return "", fmt.Errorf("Failed to find SQS queue name: %s", sqsResourceName)
 	}
-
+	return "", fmt.Errorf("Failed to find Queue name")
 }
 
 // More information on ECS
@@ -115,6 +108,10 @@ func helloWorldDecorator(serviceName string,
 	cfTemplate *gocf.Template,
 	context map[string]interface{},
 	logger *logrus.Logger) error {
+
+	if len(SSHKeyName) <= 0 {
+		return fmt.Errorf("Please provide a -k/--key argument for the SSH keyname")
+	}
 
 	logger.WithFields(logrus.Fields{
 		"DecoratorContext": context,
@@ -392,8 +389,8 @@ func helloWorldDecorator(serviceName string,
 	return nil
 }
 
-// SpartaPostBuildDockerImageHook workflow hook to build the Docker image
-func SpartaPostBuildDockerImageHook(context map[string]interface{},
+// BuildDockerImageHook workflow hook to build the Docker image
+func BuildDockerImageHook(context map[string]interface{},
 	serviceName string,
 	S3Bucket string,
 	buildID string,
@@ -449,10 +446,7 @@ func sqsListener(logger *logrus.Logger) error {
 	}).Info("SQS queue information")
 
 	// Setup a loop to process the message
-	sess, err := session.NewSession()
-	if err != nil {
-		return err
-	}
+	sess := spartaAWS.NewSession(logger)
 	sqsSvc := sqs.New(sess)
 
 	sqsRequestParams := &sqs.ReceiveMessageInput{
@@ -515,7 +509,9 @@ func main() {
 
 	// Sparta workflow hooks
 	workflowHooks := sparta.WorkflowHooks{
-		PostBuild: SpartaPostBuildDockerImageHook,
+		PostBuilds: []sparta.WorkflowHookHandler{
+			sparta.WorkflowHookFunc(BuildDockerImageHook),
+		},
 	}
 
 	// Setup an IAM role that allows the lambda function to send a message
@@ -531,10 +527,12 @@ func main() {
 	}
 
 	// The actual lambda functions
-	lambdaFn := sparta.NewLambda(iamPolicy,
+	lambdaFn := sparta.HandleAWSLambda("Hello World",
 		helloWorldLambda,
-		nil)
-	lambdaFn.Decorator = helloWorldDecorator
+		iamPolicy)
+	lambdaFn.Decorators = []sparta.TemplateDecoratorHandler{
+		sparta.TemplateDecoratorHookFunc(helloWorldDecorator),
+	}
 	lambdaFn.DependsOn = []string{sqsResourceName}
 
 	var lambdaFunctions []*sparta.LambdaAWSInfo
