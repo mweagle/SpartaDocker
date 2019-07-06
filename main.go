@@ -405,7 +405,7 @@ func BuildDockerImageHook(context map[string]interface{},
 	// Always build the image
 	buildErr := spartaDocker.BuildDockerImage(serviceName,
 		"",
-		&dockerTags,
+		dockerTags,
 		logger)
 	if nil != buildErr {
 		return buildErr
